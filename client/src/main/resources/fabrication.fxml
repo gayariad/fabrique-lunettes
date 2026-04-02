@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox alignment="CENTER" prefHeight="600.0" prefWidth="800.0" spacing="20.0"
+      fx:controller="com.lunettes.controller.FabricationController"
+      xmlns:fx="http://javafx.com/fxml/1"
+      xmlns="http://javafx.com/javafx/21">
+
+    <Label fx:id="lblStatut" text="Commande en cours de traitement..." style="-fx-font-size: 18px;" />
+    <ProgressIndicator fx:id="progressIndicator" />
+    <VBox fx:id="conteneurResultats" spacing="8.0" />
+</VBox>
