@@ -1,0 +1,6 @@
+[
+  { "id": "banana", "name": "Bananaaaa", "price": 89.99, "badge": "Nouveau", "description": "Design iconique des années 50, parfait pour un look vintage et décontracté."},
+  { "id": "chatgpt", "name": "BlaBlaBla", "price": 74.99, "badge": "", "description": "Lunettes style aviateur avec verres polarisés et monture en métal doré."},
+  { "id": "le_chat", "name": "Miaousse", "price": 129.99, "badge": "-10%", "description": "Lunettes de vue sophistiquées avec monture fine et design contemporain."},
+  { "id": "claude", "name": "Claude", "price": 99.99, "badge": "Bestseller", "description": "Monture ultra-légère et résistante, idéale pour les activités sportives."}
+]
