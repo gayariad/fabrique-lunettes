@@ -1,4 +1,4 @@
-﻿package com.lunettes.controller;
+package com.lunettes.controller;
 
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -40,6 +40,7 @@ public class CommandeController {
         this.mqttClient = mqttClient;
     }
 
+    // on remplit chaque carte produit avec les donnees lues depuis le JSON
     @FXML
     public void initialize() {
         for (int i = 0; i < produits.size(); i++) {
@@ -48,11 +49,12 @@ public class CommandeController {
             Label prixLabel = (Label) carte.getChildren().get(2);
             Label descLabel = (Label) carte.getChildren().get(3);
             nomLabel.setText(produits.get(i).name());
-            prixLabel.setText(produits.get(i).price() + " EUR");
+            prixLabel.setText(produits.get(i).price() + " €");
             descLabel.setText(produits.get(i).description());
         }
     }
 
+    // lit le fichier JSON et retourne la liste des produits
     private List<Produit> lireJson(String jsonPath) {
         try {
             Reader reader = new InputStreamReader(getClass().getResourceAsStream(jsonPath));
@@ -84,28 +86,46 @@ public class CommandeController {
             int quantite = Integer.parseInt(valeur);
             commande.ajouterLigne(produits.get(i).id(), quantite);
         }
+
+        // on refuse d'envoyer une commande vide et on previent l'utilisateur
         if (commande.estVide()) {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Commande vide");
-            alert.setContentText("Selectionnez au moins un produit.");
-            alert.showAndWait();
+            afficherErreur("Commande vide", "Veuillez selectionner au moins un produit avant de valider.");
             return;
         }
+
         String uuid = UUID.randomUUID().toString();
+        // le model sait comment serialiser : "CLAUDE:2;BANANA:1"
         String message = commande.serialiser();
+
         try {
             log.info("Envoi de la commande {} : {}", uuid, message);
+
+            // on prepare l'ecran de fabrication avant d'envoyer le message
+            // comme ca le controller est pret a recevoir la reponse du backend
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fabrication.fxml"));
             Scene scene = new Scene(loader.load());
+
             FabricationController fabricationController = loader.getController();
             fabricationController.setMqttClient(mqttClient);
             fabricationController.setUuid(uuid);
             fabricationController.demarrer();
+
             mqttClient.publish("orders/" + uuid, new MqttMessage(message.getBytes()));
+
             Stage stage = (Stage) btnValider.getScene().getWindow();
             stage.setScene(scene);
         } catch (Exception e) {
             log.error("Erreur lors de l'envoi de la commande : {}", e.getMessage());
+            afficherErreur("Erreur reseau", "Impossible d'envoyer la commande.\nVerifiez que le serveur est bien demarre.");
         }
+    }
+
+    // affiche une boite de dialogue d'erreur a l'utilisateur
+    private void afficherErreur(String titre, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(titre);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }
