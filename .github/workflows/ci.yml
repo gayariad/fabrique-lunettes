@@ -1,6 +1,5 @@
 name: CI - Tests et Release
 
-# declencheurs : lancer le workflow à chaque push sur main et sur chaque pull request vers main
 on:
   push:
     branches: [ main ]
@@ -8,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  #job 1 : lancer les tests dans un job separe pour pouvoir les publier dans l'interface GitHub et ne creer la release que si les tests passent 
+  # Job 1 : tests JUnit sur tous les modules
   tests:
     name: Tests JUnit
     runs-on: ubuntu-latest
@@ -17,19 +16,15 @@ jobs:
       contents: read
 
     steps:
-      # etape 1 : recuperer le code du depot
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # etape 2 : installer Java 17
       - name: Installer Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # etape 3 : mettre en cache les dependances Maven
-      # evite de tout retelecharger a chaque run (gain de temps)
       - name: Cache Maven
         uses: actions/cache@v4
         with:
@@ -38,8 +33,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # etape 4 : configurer l'acces au depot GitHub Packages pour la lib fabricateur
-      # le token GITHUB_TOKEN est fourni automatiquement par GitHub Actions
       - name: Configurer settings.xml pour GitHub Packages
         uses: actions/setup-java@v4
         with:
@@ -49,13 +42,11 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      # etape 5 : lancer tous les tests sans lancer l'application
       - name: Lancer les tests Maven
         run: mvn -B test --no-transfer-progress
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # etape 6 : publier le rapport de tests dans l'interface GitHub
       - name: Publier les resultats des tests
         uses: dorny/test-reporter@v1
         if: always()
@@ -64,9 +55,9 @@ jobs:
           path: '**/target/surefire-reports/*.xml'
           reporter: java-junit
 
-  # job 2 : creer une release GitHub avec les JARs en pieces jointes, mais seulement si les tests du job 1 passent et seulement pour les push sur main (pas pour les PR)
-  release:
-    name: Creer une Release
+  # Job 2 : backend fat JAR (une seule fois, pas de natif)
+  release-backend:
+    name: Release Backend
     runs-on: ubuntu-latest
     needs: tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -100,20 +91,16 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      # compiler et packager sans relancer les tests
-      - name: Compiler et packager
-        run: mvn -B package -DskipTests --no-transfer-progress
+      - name: Compiler et packager le backend
+        run: mvn -B package -DskipTests --no-transfer-progress -pl backend
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # generer un numero de version unique base sur la date et le numero du run
-      # ex: v20226.03.30-42
       - name: Generer le tag de version
         id: version
         run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
 
-      # creer la release GitHub avec les JARs en pieces jointes
-      - name: Creer la Release GitHub
+      - name: Creer la Release GitHub avec le backend
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -121,8 +108,179 @@ jobs:
           body: |
             Release automatique generee par GitHub Actions.
             Commit : ${{ github.sha }}
-          files: |
-            backend/target/*.jar
-            client/target/*.jar
+
+            ## Client JavaFX (autonome, sans installation requise)
+            Telechargez l'archive correspondant a votre OS :
+            - `client-win.zip` pour Windows
+            - `client-linux.zip` pour Linux
+            - `client-mac.zip` pour macOS
+
+            Dezippez et lancez `bin/client` (Linux/macOS) ou `bin\client.bat` (Windows).
+            Java et JavaFX sont inclus dans l'archive.
+
+            ## Backend
+            Requiert Java 17+. Lancement : `java -jar backend-runnable.jar`
+          files: backend/target/backend-runnable.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Jobs 3a/3b/3c : client JavaFX en parallele pour les 3 OS.
+  # Chaque job tourne sur le runner natif de la plateforme cible :
+  # le profil Maven (javafx-win/linux/mac) s'active automatiquement
+  # et telecharge les JARs JavaFX natifs correspondants.
+  # jlink produit une image autonome : JRE minimal + JavaFX + appli.
+  release-client-windows:
+    name: Release Client (Windows)
+    runs-on: windows-latest
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~\.m2\repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Configurer settings.xml pour GitHub Packages
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: github-fabricateur
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Construire l'image runtime Windows
+        run: mvn -B verify -DskipTests --no-transfer-progress -pl client
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generer le tag de version
+        id: version
+        run: echo "tag=v$(Get-Date -Format 'yyyy.MM.dd')-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Attacher client-win.zip a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: client/target/client-win.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-client-linux:
+    name: Release Client (Linux)
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Configurer settings.xml pour GitHub Packages
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: github-fabricateur
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Construire l'image runtime Linux
+        run: mvn -B verify -DskipTests --no-transfer-progress -pl client
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generer le tag de version
+        id: version
+        run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Attacher client-linux.zip a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: client/target/client-linux.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-client-mac:
+    name: Release Client (macOS)
+    runs-on: macos-latest
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Configurer settings.xml pour GitHub Packages
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: github-fabricateur
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Construire l'image runtime macOS
+        run: mvn -B verify -DskipTests --no-transfer-progress -pl client
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generer le tag de version
+        id: version
+        run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Attacher client-mac.zip a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: client/target/client-mac.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

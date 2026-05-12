@@ -12,73 +12,219 @@
   <version>1.0-SNAPSHOT</version>
   <name>client</name>
   <url>http://maven.apache.org</url>
+
+  <properties>
+    <javafx.version>21</javafx.version>
+    <!--
+      Classificateur des JARs natifs JavaFX : win | linux | mac.
+      Valeur vide par defaut, ecrasee par le profil OS actif.
+      Necessaire pour que jlink embarque les .dll/.so/.dylib dans l'image.
+    -->
+    <javafx.platform/>
+  </properties>
+
   <dependencies>
 
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-controls</artifactId>
-      <version>21</version>
+      <version>${javafx.version}</version>
     </dependency>
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-fxml</artifactId>
-      <version>21</version>
+      <version>${javafx.version}</version>
+    </dependency>
+
+    <!--
+      JARs natifs classifies : Maven les telecharge depuis Maven Central
+      pour la plateforme cible (profil actif). jlink les inclut dans l'image
+      runtime. L'utilisateur final n'installe ni JDK ni JavaFX SDK.
+    -->
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-base</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-graphics</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-controls</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-fxml</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
     </dependency>
 
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.10.1</version>
-  </dependency>
-  
+    </dependency>
+
   </dependencies>
+
+  <!--
+    Profils OS : actives automatiquement par la propriete os.name de la JVM.
+    Sur le runner GitHub Actions (ubuntu/windows/macos), le bon profil s'active
+    sans aucune configuration manuelle.
+  -->
+  <profiles>
+    <profile>
+      <id>javafx-win</id>
+      <activation><os><family>windows</family></os></activation>
+      <properties><javafx.platform>win</javafx.platform></properties>
+    </profile>
+    <profile>
+      <id>javafx-linux</id>
+      <activation><os><family>unix</family></os></activation>
+      <properties><javafx.platform>linux</javafx.platform></properties>
+    </profile>
+    <profile>
+      <id>javafx-mac</id>
+      <activation><os><family>mac</family></os></activation>
+      <properties><javafx.platform>mac</javafx.platform></properties>
+    </profile>
+  </profiles>
 
   <build>
     <plugins>
 
+      <!-- Dev local : mvn javafx:run -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
         <version>0.0.8</version>
         <configuration>
-          <mainClass>com.lunettes.App</mainClass>
+          <mainClass>com.lunettes/com.lunettes.App</mainClass>
+          <!--
+            jlink : produit target/client-image/, une image runtime autonome.
+            Elle contient un JRE minimal + JavaFX natif + un script bin/client(.bat).
+            L'utilisateur dezippe et double-clique sur le script, sans installer Java.
+          -->
+          <compress>2</compress>
+          <noHeaderFiles>true</noHeaderFiles>
+          <noManPages>true</noManPages>
+          <stripDebug>true</stripDebug>
+          <jlinkImageName>client-image</jlinkImageName>
+          <launcher>client</launcher>
+          <jlinkZipName>client-${javafx.platform}</jlinkZipName>
+          <!--
+            Les JARs non-modulaires (Paho, Logback, SLF4J) ne peuvent pas etre
+            inclus dans l'image jlink (pas de module-info). On les copie dans
+            libs/ via maven-dependency-plugin et on les ajoute au classpath
+            du launcher via les options add-opens et cp.
+          -->
+          <options>
+            <option>--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED</option>
+          </options>
+          <runtimePathOption>MODULEPATH</runtimePathOption>
         </configuration>
-      </plugin>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>3.5.2</version>
         <executions>
           <execution>
+            <id>jlink-image</id>
             <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-              <outputFile>${project.build.directory}/client-runnable.jar</outputFile>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.lunettes.App</mainClass>
-                </transformer>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-              </transformers>
+            <goals><goal>jlink</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
 
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                  </excludes>
-                </filter>
-              </filters>
+      <!--
+        Copie les JARs non-modulaires dans target/libs/ AVANT le goal jlink.
+        Le script wrapper (genere par exec-maven-plugin) les ajoutera au classpath.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.6.1</version>
+        <executions>
+          <execution>
+            <id>copy-non-modular-deps</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/libs</outputDirectory>
+              <includeScope>runtime</includeScope>
+              <excludeGroupIds>org.openjfx</excludeGroupIds>
             </configuration>
           </execution>
         </executions>
       </plugin>
+
+      <!--
+        Copie target/libs/ dans l'image jlink apres sa creation,
+        et genere un script wrapper qui les ajoute au classpath.
+        Phase post-package pour s'executer apres le goal jlink.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>embed-libs-in-image</id>
+            <phase>verify</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <!-- Copie les JARs non-modulaires dans l'image -->
+                <copy todir="${project.build.directory}/client-image/libs">
+                  <fileset dir="${project.build.directory}/libs"/>
+                </copy>
+                <!-- Copie aussi le JAR du client lui-meme -->
+                <copy todir="${project.build.directory}/client-image/libs"
+                      file="${project.build.directory}/${project.build.finalName}.jar"/>
+
+                <!-- Script Linux/macOS : remplace le launcher jlink par un wrapper classpath -->
+                <echo file="${project.build.directory}/client-image/bin/client" append="false">#!/bin/sh
+                  DIR="$(cd "$(dirname "$0")/.." &amp;&amp; pwd)"
+                  CP=$(find "$DIR/libs" -name "*.jar" | tr '\n' ':')
+                  exec "$DIR/bin/java" --module-path "$DIR/lib" --add-modules ALL-MODULE-PATH \
+                    --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED \
+                    -cp "$CP" com.lunettes.App "$@"
+                </echo>
+                <chmod file="${project.build.directory}/client-image/bin/client" perm="755"/>
+
+                <!-- Script Windows : meme chose en .bat -->
+                <echo file="${project.build.directory}/client-image/bin/client.bat" append="false">@echo off
+                  set DIR=%~dp0..
+                  set CP=
+                  for %%f in ("%DIR%\libs\*.jar") do set CP=!CP!;%%f
+                  setlocal enabledelayedexpansion
+                  "%DIR%\bin\java.exe" --module-path "%DIR%\lib" --add-modules ALL-MODULE-PATH ^
+                    --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED ^
+                    -cp "%CP:~1%" com.lunettes.App %*
+                </echo>
+              </target>
+            </configuration>
+          </execution>
+
+          <!-- Zippe l'image finale apres injection des libs -->
+          <execution>
+            <id>zip-image</id>
+            <phase>verify</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <zip destfile="${project.build.directory}/client-${javafx.platform}.zip"
+                    basedir="${project.build.directory}/client-image"
+                    level="9"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
     </plugins>
   </build>
 </project>
