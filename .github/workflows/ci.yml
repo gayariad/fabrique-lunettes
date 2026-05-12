@@ -18,10 +18,10 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Installer Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Maven
@@ -35,7 +35,7 @@ jobs:
       - name: Configurer settings.xml pour GitHub Packages
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           server-id: github-fabricateur
           server-username: GITHUB_ACTOR
@@ -54,7 +54,6 @@ jobs:
           path: '**/target/surefire-reports/*.xml'
           reporter: java-junit
 
-  # Calcule le tag une seule fois pour que toutes les releases partagent le meme tag.
   prepare-release:
     name: Preparer le tag de release
     runs-on: ubuntu-latest
@@ -70,7 +69,7 @@ jobs:
         id: version
         run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
 
-      - name: Creer la Release GitHub (vide, sera completee par les jobs suivants)
+      - name: Creer la Release GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -79,14 +78,13 @@ jobs:
             Release automatique generee par GitHub Actions.
             Commit : ${{ github.sha }}
 
-            ## Client JavaFX (autonome, sans installation requise)
-            Telechargez l'archive correspondant a votre OS :
-            - `client-win.zip` pour Windows
-            - `client-linux.zip` pour Linux
-            - `client-mac.zip` pour macOS
+            ## Client JavaFX (aucune installation requise)
+            Telechargez le fichier correspondant a votre OS :
+            - **Windows** : `FabriqueLunettes-win.exe` — double-cliquez pour installer, puis lancez depuis le Bureau
+            - **Linux** : `FabriqueLunettes-linux.zip` — dezippez et lancez `FabriqueLunettes/bin/FabriqueLunettes`
+            - **macOS** : `FabriqueLunettes-mac.dmg` — ouvrez le DMG et glissez l'app dans Applications
 
-            Dezippez et lancez `client.bat` (Windows) ou `client.sh` (Linux/macOS).
-            Java et JavaFX sont inclus dans l'archive, aucune installation requise.
+            Java est inclus, aucune installation requise.
 
             ## Backend
             Requiert Java 17+. Lancement : `java -jar backend-runnable.jar`
@@ -104,10 +102,10 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Installer Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Maven
@@ -121,7 +119,7 @@ jobs:
       - name: Configurer settings.xml pour GitHub Packages
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           server-id: github-fabricateur
           server-username: GITHUB_ACTOR
@@ -151,11 +149,13 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      # Java 21 avec JavaFX full JDK (Liberica inclut JavaFX nativement)
+      - name: Installer Liberica JDK 21 avec JavaFX
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: '21'
+          distribution: 'liberica'
+          java-package: jdk+fx
 
       - name: Cache Maven
         uses: actions/cache@v4
@@ -168,51 +168,43 @@ jobs:
       - name: Configurer settings.xml pour GitHub Packages
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: '21'
+          distribution: 'liberica'
+          java-package: jdk+fx
           server-id: github-fabricateur
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Construire le fat-JAR
+      - name: Compiler le client (sans tests)
         run: mvn -B package -DskipTests --no-transfer-progress -pl client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Telecharger JRE Temurin 17 Windows
-        run: |
-          curl -L -o jre-win.zip "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk"
-
-      - name: Telecharger JavaFX 21 SDK Windows
-        run: |
-          curl -L -o javafx-win.zip "https://download2.gluonhq.com/openjfx/21/openjfx-21_windows-x64_bin-sdk.zip"
-
-      - name: Assembler le zip client-win
+      - name: Creer l'image applicative avec jpackage
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path dist\client-win\jre    -Force | Out-Null
-          New-Item -ItemType Directory -Path dist\client-win\lib    -Force | Out-Null
+          Copy-Item client\target\client-runnable.jar client\target\jpackage-input\
 
-          Expand-Archive -Path jre-win.zip -DestinationPath dist\client-win\jre-extract
-          $jreRoot = (Get-ChildItem dist\client-win\jre-extract -Directory | Select-Object -First 1).FullName
-          Move-Item "$jreRoot\*" dist\client-win\jre
+          jpackage `
+            --type app-image `
+            --name FabriqueLunettes `
+            --input client\target\jpackage-input `
+            --main-jar client-runnable.jar `
+            --main-class com.lunettes.App `
+            --java-options "--add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED" `
+            --dest dist-win
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          Expand-Archive -Path javafx-win.zip -DestinationPath dist\client-win\javafx-extract
-          $fxLib = (Get-ChildItem dist\client-win\javafx-extract -Recurse -Directory -Filter "lib" | Select-Object -First 1).FullName
-          Copy-Item "$fxLib\*" dist\client-win\lib
+      - name: Compresser en zip
+        shell: pwsh
+        run: Compress-Archive -Path dist-win\FabriqueLunettes -DestinationPath FabriqueLunettes-win.zip
 
-          Copy-Item client\target\client-runnable.jar dist\client-win\client.jar
-
-          $bat = "@echo off`r`nset DIR=%~dp0`r`nset DIR=%DIR:~0,-1%`r`n`"%DIR%\jre\bin\java.exe`" --module-path `"%DIR%\lib`" --add-modules javafx.controls,javafx.fxml --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED -cp `"%DIR%\client.jar`" com.lunettes.App %*`r`nif %ERRORLEVEL% neq 0 pause`r`n"
-          [System.IO.File]::WriteAllText("$PWD\dist\client-win\client.bat", $bat, [System.Text.Encoding]::ASCII)
-
-          Compress-Archive -Path dist\client-win\* -DestinationPath client-win.zip
-
-      - name: Attacher client-win.zip a la Release
+      - name: Attacher FabriqueLunettes-win.zip a la Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-release.outputs.tag }}
-          files: client-win.zip
+          files: FabriqueLunettes-win.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -227,11 +219,12 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Installer Liberica JDK 21 avec JavaFX
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: '21'
+          distribution: 'liberica'
+          java-package: jdk+fx
 
       - name: Cache Maven
         uses: actions/cache@v4
@@ -244,54 +237,41 @@ jobs:
       - name: Configurer settings.xml pour GitHub Packages
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: '21'
+          distribution: 'liberica'
+          java-package: jdk+fx
           server-id: github-fabricateur
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Construire le fat-JAR
+      - name: Compiler le client (sans tests)
         run: mvn -B package -DskipTests --no-transfer-progress -pl client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Telecharger JRE Temurin 17 Linux
+      - name: Creer l'image applicative avec jpackage
         run: |
-          curl -L -o jre-linux.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jre/hotspot/normal/eclipse?project=jdk"
+          cp client/target/client-runnable.jar client/target/jpackage-input/
 
-      - name: Telecharger JavaFX 21 SDK Linux
-        run: |
-          curl -L -o javafx-linux.zip "https://download2.gluonhq.com/openjfx/21/openjfx-21_linux-x64_bin-sdk.zip"
+          jpackage \
+            --type app-image \
+            --name FabriqueLunettes \
+            --input client/target/jpackage-input \
+            --main-jar client-runnable.jar \
+            --main-class com.lunettes.App \
+            --java-options "--add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED" \
+            --dest dist-linux
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Assembler le zip client-linux
-        run: |
-          mkdir -p dist/client-linux/jre dist/client-linux/lib
+      - name: Compresser en zip
+        run: cd dist-linux && zip -r ../FabriqueLunettes-linux.zip FabriqueLunettes/
 
-          tar -xzf jre-linux.tar.gz -C dist/client-linux/jre --strip-components=1
-
-          unzip -q javafx-linux.zip -d dist/client-linux/javafx-extract
-          FX_LIB=$(find dist/client-linux/javafx-extract -type d -name lib | head -1)
-          cp "$FX_LIB"/*.jar dist/client-linux/lib/
-          cp "$FX_LIB"/*.so  dist/client-linux/lib/ 2>/dev/null || true
-
-          cp client/target/client-runnable.jar dist/client-linux/client.jar
-
-          cat > dist/client-linux/client.sh << 'EOF'
-          #!/bin/sh
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          "$DIR/jre/bin/java" --module-path "$DIR/lib" --add-modules javafx.controls,javafx.fxml \
-            --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED \
-            -jar "$DIR/client.jar" "$@"
-          EOF
-          chmod +x dist/client-linux/client.sh
-
-          cd dist && zip -r ../client-linux.zip client-linux/
-
-      - name: Attacher client-linux.zip a la Release
+      - name: Attacher FabriqueLunettes-linux.zip a la Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-release.outputs.tag }}
-          files: client-linux.zip
+          files: FabriqueLunettes-linux.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -306,11 +286,12 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Installer Liberica JDK 21 avec JavaFX
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: '21'
+          distribution: 'liberica'
+          java-package: jdk+fx
 
       - name: Cache Maven
         uses: actions/cache@v4
@@ -323,53 +304,37 @@ jobs:
       - name: Configurer settings.xml pour GitHub Packages
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: '21'
+          distribution: 'liberica'
+          java-package: jdk+fx
           server-id: github-fabricateur
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Construire le fat-JAR
+      - name: Compiler le client (sans tests)
         run: mvn -B package -DskipTests --no-transfer-progress -pl client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Telecharger JRE Temurin 17 macOS
+      - name: Creer le DMG avec jpackage
         run: |
-          curl -L -o jre-mac.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/mac/x64/jre/hotspot/normal/eclipse?project=jdk"
+          cp client/target/client-runnable.jar client/target/jpackage-input/
 
-      - name: Telecharger JavaFX 21 SDK macOS
-        run: |
-          curl -L -o javafx-mac.zip "https://download2.gluonhq.com/openjfx/21/openjfx-21_osx-x64_bin-sdk.zip"
+          jpackage \
+            --type dmg \
+            --name FabriqueLunettes \
+            --input client/target/jpackage-input \
+            --main-jar client-runnable.jar \
+            --main-class com.lunettes.App \
+            --java-options "--add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED" \
+            --dest dist-mac
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Assembler le zip client-mac
-        run: |
-          mkdir -p dist/client-mac/jre dist/client-mac/lib
-
-          tar -xzf jre-mac.tar.gz -C dist/client-mac/jre --strip-components=1
-
-          unzip -q javafx-mac.zip -d dist/client-mac/javafx-extract
-          FX_LIB=$(find dist/client-mac/javafx-extract -type d -name lib | head -1)
-          cp "$FX_LIB"/*.jar  dist/client-mac/lib/
-          cp "$FX_LIB"/*.dylib dist/client-mac/lib/ 2>/dev/null || true
-
-          cp client/target/client-runnable.jar dist/client-mac/client.jar
-
-          cat > dist/client-mac/client.sh << 'EOF'
-          #!/bin/sh
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          "$DIR/jre/Contents/Home/bin/java" --module-path "$DIR/lib" --add-modules javafx.controls,javafx.fxml \
-            --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED \
-            -jar "$DIR/client.jar" "$@"
-          EOF
-          chmod +x dist/client-mac/client.sh
-
-          cd dist && zip -r ../client-mac.zip client-mac/
-
-      - name: Attacher client-mac.zip a la Release
+      - name: Attacher FabriqueLunettes-mac.dmg a la Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-release.outputs.tag }}
-          files: client-mac.zip
+          files: dist-mac/FabriqueLunettes-*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
