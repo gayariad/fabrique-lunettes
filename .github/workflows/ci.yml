@@ -7,7 +7,6 @@ on:
     branches: [ main ]
 
 jobs:
-  # Job 1 : tests JUnit sur tous les modules
   tests:
     name: Tests JUnit
     runs-on: ubuntu-latest
@@ -55,12 +54,49 @@ jobs:
           path: '**/target/surefire-reports/*.xml'
           reporter: java-junit
 
-  # Job 2 : backend fat JAR (une seule fois, pas de natif)
-  release-backend:
-    name: Release Backend
+  # Calcule le tag une seule fois pour que toutes les releases partagent le meme tag.
+  prepare-release:
+    name: Preparer le tag de release
     runs-on: ubuntu-latest
     needs: tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Generer le tag de version
+        id: version
+        run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Creer la Release GitHub (vide, sera completee par les jobs suivants)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Release ${{ steps.version.outputs.tag }}"
+          body: |
+            Release automatique generee par GitHub Actions.
+            Commit : ${{ github.sha }}
+
+            ## Client JavaFX (autonome, sans installation requise)
+            Telechargez l'archive correspondant a votre OS :
+            - `client-win.zip` pour Windows
+            - `client-linux.zip` pour Linux
+            - `client-mac.zip` pour macOS
+
+            Dezippez et lancez `client.bat` (Windows) ou `client.sh` (Linux/macOS).
+            Java et JavaFX sont inclus dans l'archive, aucune installation requise.
+
+            ## Backend
+            Requiert Java 17+. Lancement : `java -jar backend-runnable.jar`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-backend:
+    name: Release Backend
+    runs-on: ubuntu-latest
+    needs: prepare-release
     permissions:
       contents: write
 
@@ -96,44 +132,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generer le tag de version
-        id: version
-        run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
-
-      - name: Creer la Release GitHub avec le backend
+      - name: Attacher backend-runnable.jar a la Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Release ${{ steps.version.outputs.tag }}"
-          body: |
-            Release automatique generee par GitHub Actions.
-            Commit : ${{ github.sha }}
-
-            ## Client JavaFX (autonome, sans installation requise)
-            Telechargez l'archive correspondant a votre OS :
-            - `client-win.zip` pour Windows
-            - `client-linux.zip` pour Linux
-            - `client-mac.zip` pour macOS
-
-            Dezippez et lancez `bin/client` (Linux/macOS) ou `bin\client.bat` (Windows).
-            Java et JavaFX sont inclus dans l'archive.
-
-            ## Backend
-            Requiert Java 17+. Lancement : `java -jar backend-runnable.jar`
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
           files: backend/target/backend-runnable.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Jobs 3a/3b/3c : client JavaFX en parallele pour les 3 OS.
-  # Chaque job tourne sur le runner natif de la plateforme cible :
-  # le profil Maven (javafx-win/linux/mac) s'active automatiquement
-  # et telecharge les JARs JavaFX natifs correspondants.
-  # jlink produit une image autonome : JRE minimal + JavaFX + appli.
   release-client-windows:
     name: Release Client (Windows)
     runs-on: windows-latest
-    needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: prepare-release
     permissions:
       contents: write
 
@@ -164,28 +174,57 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Construire l'image runtime Windows
-        run: mvn -B verify -DskipTests --no-transfer-progress -pl client
+      - name: Construire le fat-JAR
+        run: mvn -B package -DskipTests --no-transfer-progress -pl client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generer le tag de version
-        id: version
-        run: echo "tag=v$(Get-Date -Format 'yyyy.MM.dd')-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+      - name: Telecharger JRE Temurin 17 Windows
+        run: |
+          curl -L -o jre-win.zip "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk"
+
+      - name: Telecharger JavaFX 21 SDK Windows
+        run: |
+          curl -L -o javafx-win.zip "https://download2.gluonhq.com/openjfx/21/openjfx-21_windows-x64_bin-sdk.zip"
+
+      - name: Assembler le zip client-win
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist\client-win\jre    -Force | Out-Null
+          New-Item -ItemType Directory -Path dist\client-win\lib    -Force | Out-Null
+
+          Expand-Archive -Path jre-win.zip -DestinationPath dist\client-win\jre-extract
+          $jreRoot = (Get-ChildItem dist\client-win\jre-extract -Directory | Select-Object -First 1).FullName
+          Move-Item "$jreRoot\*" dist\client-win\jre
+
+          Expand-Archive -Path javafx-win.zip -DestinationPath dist\client-win\javafx-extract
+          $fxLib = (Get-ChildItem dist\client-win\javafx-extract -Recurse -Directory -Filter "lib" | Select-Object -First 1).FullName
+          Copy-Item "$fxLib\*" dist\client-win\lib
+
+          Copy-Item client\target\client-runnable.jar dist\client-win\client.jar
+
+          @'
+          @echo off
+          set DIR=%~dp0
+          "%DIR%jre\bin\java.exe" --module-path "%DIR%lib" --add-modules javafx.controls,javafx.fxml ^
+            --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED ^
+            -jar "%DIR%client.jar" %*
+          '@ | Out-File -FilePath dist\client-win\client.bat -Encoding ascii
+
+          Compress-Archive -Path dist\client-win\* -DestinationPath client-win.zip
 
       - name: Attacher client-win.zip a la Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          files: client/target/client-win.zip
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          files: client-win.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-client-linux:
     name: Release Client (Linux)
     runs-on: ubuntu-latest
-    needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: prepare-release
     permissions:
       contents: write
 
@@ -216,28 +255,55 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Construire l'image runtime Linux
-        run: mvn -B verify -DskipTests --no-transfer-progress -pl client
+      - name: Construire le fat-JAR
+        run: mvn -B package -DskipTests --no-transfer-progress -pl client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generer le tag de version
-        id: version
-        run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
+      - name: Telecharger JRE Temurin 17 Linux
+        run: |
+          curl -L -o jre-linux.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jre/hotspot/normal/eclipse?project=jdk"
+
+      - name: Telecharger JavaFX 21 SDK Linux
+        run: |
+          curl -L -o javafx-linux.zip "https://download2.gluonhq.com/openjfx/21/openjfx-21_linux-x64_bin-sdk.zip"
+
+      - name: Assembler le zip client-linux
+        run: |
+          mkdir -p dist/client-linux/jre dist/client-linux/lib
+
+          tar -xzf jre-linux.tar.gz -C dist/client-linux/jre --strip-components=1
+
+          unzip -q javafx-linux.zip -d dist/client-linux/javafx-extract
+          FX_LIB=$(find dist/client-linux/javafx-extract -type d -name lib | head -1)
+          cp "$FX_LIB"/*.jar dist/client-linux/lib/
+          cp "$FX_LIB"/*.so  dist/client-linux/lib/ 2>/dev/null || true
+
+          cp client/target/client-runnable.jar dist/client-linux/client.jar
+
+          cat > dist/client-linux/client.sh << 'EOF'
+          #!/bin/sh
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          "$DIR/jre/bin/java" --module-path "$DIR/lib" --add-modules javafx.controls,javafx.fxml \
+            --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED \
+            -jar "$DIR/client.jar" "$@"
+          EOF
+          chmod +x dist/client-linux/client.sh
+
+          cd dist && zip -r ../client-linux.zip client-linux/
 
       - name: Attacher client-linux.zip a la Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          files: client/target/client-linux.zip
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          files: client-linux.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-client-mac:
     name: Release Client (macOS)
     runs-on: macos-latest
-    needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: prepare-release
     permissions:
       contents: write
 
@@ -268,19 +334,47 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Construire l'image runtime macOS
-        run: mvn -B verify -DskipTests --no-transfer-progress -pl client
+      - name: Construire le fat-JAR
+        run: mvn -B package -DskipTests --no-transfer-progress -pl client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generer le tag de version
-        id: version
-        run: echo "tag=v$(date +'%Y.%m.%d')-${{ github.run_number }}" >> $GITHUB_OUTPUT
+      - name: Telecharger JRE Temurin 17 macOS
+        run: |
+          curl -L -o jre-mac.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/mac/x64/jre/hotspot/normal/eclipse?project=jdk"
+
+      - name: Telecharger JavaFX 21 SDK macOS
+        run: |
+          curl -L -o javafx-mac.zip "https://download2.gluonhq.com/openjfx/21/openjfx-21_osx-x64_bin-sdk.zip"
+
+      - name: Assembler le zip client-mac
+        run: |
+          mkdir -p dist/client-mac/jre dist/client-mac/lib
+
+          tar -xzf jre-mac.tar.gz -C dist/client-mac/jre --strip-components=1
+
+          unzip -q javafx-mac.zip -d dist/client-mac/javafx-extract
+          FX_LIB=$(find dist/client-mac/javafx-extract -type d -name lib | head -1)
+          cp "$FX_LIB"/*.jar  dist/client-mac/lib/
+          cp "$FX_LIB"/*.dylib dist/client-mac/lib/ 2>/dev/null || true
+
+          cp client/target/client-runnable.jar dist/client-mac/client.jar
+
+          cat > dist/client-mac/client.sh << 'EOF'
+          #!/bin/sh
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          "$DIR/jre/Contents/Home/bin/java" --module-path "$DIR/lib" --add-modules javafx.controls,javafx.fxml \
+            --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED \
+            -jar "$DIR/client.jar" "$@"
+          EOF
+          chmod +x dist/client-mac/client.sh
+
+          cd dist && zip -r ../client-mac.zip client-mac/
 
       - name: Attacher client-mac.zip a la Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          files: client/target/client-mac.zip
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          files: client-mac.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
