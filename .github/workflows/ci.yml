@@ -203,7 +203,7 @@ jobs:
 
           Copy-Item client\target\client-runnable.jar dist\client-win\client.jar
 
-          $bat = "@echo off`r`nset DIR=%~dp0`r`n`"%DIR%jre\bin\java.exe`" -Djava.library.path=`"%DIR%lib`" --module-path `"%DIR%lib`" --add-modules javafx.controls,javafx.fxml --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED -jar `"%DIR%client.jar`" %*`r`nif %ERRORLEVEL% neq 0 pause`r`n"
+          $bat = "@echo off`r`nset DIR=%~dp0`r`nset DIR=%DIR:~0,-1%`r`n`"%DIR%\jre\bin\java.exe`" --module-path `"%DIR%\lib`" --add-modules javafx.controls,javafx.fxml --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED -cp `"%DIR%\client.jar`" com.lunettes.App %*`r`nif %ERRORLEVEL% neq 0 pause`r`n"
           [System.IO.File]::WriteAllText("$PWD\dist\client-win\client.bat", $bat, [System.Text.Encoding]::ASCII)
 
           Compress-Archive -Path dist\client-win\* -DestinationPath client-win.zip
