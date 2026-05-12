@@ -16,7 +16,7 @@
       xmlns:fx="http://javafx.com/fxml/1"
       xmlns="http://javafx.com/javafx/21">
 
-    <Button fx:id="btnRetour" text="← Retour" onAction="#onRetour" 
+    <Button fx:id="btnRetour" text="← Retour" onAction="#onRetour"
         style="-fx-font-size: 13px;"
         VBox.vgrow="NEVER"/>
 
@@ -28,55 +28,18 @@
 
     <HBox fx:id="conteneurCartes" alignment="CENTER" spacing="16.0">
 
-        <VBox prefWidth="190.0" spacing="8.0" style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
-            <padding><Insets top="12.0" bottom="12.0" left="12.0" right="12.0" /></padding>
-            <ImageView fitHeight="140.0" fitWidth="160.0" preserveRatio="true" pickOnBounds="true">
-                <image><Image url="@assets/claude.png" /></image>
-            </ImageView>
-            <Label text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
-            <Label text="Prix" />
-            <Label text="Description" wrapText="true" />
-            <ComboBox prefWidth="160.0">
-                <items>
-                    <FXCollections fx:factory="observableArrayList">
-                        <String fx:value="0" /><String fx:value="1" /><String fx:value="2" />
-                        <String fx:value="3" /><String fx:value="4" /><String fx:value="5" />
-                        <String fx:value="6" /><String fx:value="7" /><String fx:value="8" />
-                        <String fx:value="9" />
-                    </FXCollections>
-                </items>
-            </ComboBox>
-        </VBox>
-
-        <VBox prefWidth="190.0" spacing="8.0" style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
-            <padding><Insets top="12.0" bottom="12.0" left="12.0" right="12.0" /></padding>
-            <ImageView fitHeight="140.0" fitWidth="160.0" preserveRatio="true" pickOnBounds="true">
-                <image><Image url="@assets/chatgpt.png" /></image>
-            </ImageView>
-            <Label text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
-            <Label text="Prix" />
-            <Label text="Description" wrapText="true" />
-            <ComboBox prefWidth="160.0">
-                <items>
-                    <FXCollections fx:factory="observableArrayList">
-                        <String fx:value="0" /><String fx:value="1" /><String fx:value="2" />
-                        <String fx:value="3" /><String fx:value="4" /><String fx:value="5" />
-                        <String fx:value="6" /><String fx:value="7" /><String fx:value="8" />
-                        <String fx:value="9" />
-                    </FXCollections>
-                </items>
-            </ComboBox>
-        </VBox>
-
-        <VBox prefWidth="190.0" spacing="8.0" style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
+        <!-- Carte 0 : banana -->
+        <VBox fx:id="carte0" prefWidth="190.0" spacing="8.0"
+              style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
             <padding><Insets top="12.0" bottom="12.0" left="12.0" right="12.0" /></padding>
             <ImageView fitHeight="140.0" fitWidth="160.0" preserveRatio="true" pickOnBounds="true">
                 <image><Image url="@assets/banana.png" /></image>
             </ImageView>
-            <Label text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
-            <Label text="Prix" />
-            <Label text="Description" wrapText="true" />
-            <ComboBox prefWidth="160.0">
+            <Label fx:id="nomLabel0" text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
+            <Label fx:id="prixLabel0" text="Prix" />
+            <Label fx:id="descLabel0" text="Description" wrapText="true" />
+            <Label fx:id="badgeLabel0" text="" style="-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #ffffff; -fx-background-color: #e07b00; -fx-background-radius: 4; -fx-padding: 2 6 2 6;" />
+            <ComboBox fx:id="combo0" prefWidth="160.0">
                 <items>
                     <FXCollections fx:factory="observableArrayList">
                         <String fx:value="0" /><String fx:value="1" /><String fx:value="2" />
@@ -88,15 +51,64 @@
             </ComboBox>
         </VBox>
 
-        <VBox prefWidth="190.0" spacing="8.0" style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
+        <!-- Carte 1 : chatgpt -->
+        <VBox fx:id="carte1" prefWidth="190.0" spacing="8.0"
+              style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
+            <padding><Insets top="12.0" bottom="12.0" left="12.0" right="12.0" /></padding>
+            <ImageView fitHeight="140.0" fitWidth="160.0" preserveRatio="true" pickOnBounds="true">
+                <image><Image url="@assets/chatgpt.png" /></image>
+            </ImageView>
+            <Label fx:id="nomLabel1" text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
+            <Label fx:id="prixLabel1" text="Prix" />
+            <Label fx:id="descLabel1" text="Description" wrapText="true" />
+            <Label fx:id="badgeLabel1" text="" style="-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #ffffff; -fx-background-color: #e07b00; -fx-background-radius: 4; -fx-padding: 2 6 2 6;" />
+            <ComboBox fx:id="combo1" prefWidth="160.0">
+                <items>
+                    <FXCollections fx:factory="observableArrayList">
+                        <String fx:value="0" /><String fx:value="1" /><String fx:value="2" />
+                        <String fx:value="3" /><String fx:value="4" /><String fx:value="5" />
+                        <String fx:value="6" /><String fx:value="7" /><String fx:value="8" />
+                        <String fx:value="9" />
+                    </FXCollections>
+                </items>
+            </ComboBox>
+        </VBox>
+
+        <!-- Carte 2 : le_chat -->
+        <VBox fx:id="carte2" prefWidth="190.0" spacing="8.0"
+              style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
             <padding><Insets top="12.0" bottom="12.0" left="12.0" right="12.0" /></padding>
             <ImageView fitHeight="140.0" fitWidth="160.0" preserveRatio="true" pickOnBounds="true">
                 <image><Image url="@assets/le_chat.png" /></image>
             </ImageView>
-            <Label text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
-            <Label text="Prix" />
-            <Label text="Description" wrapText="true" />
-            <ComboBox prefWidth="160.0">
+            <Label fx:id="nomLabel2" text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
+            <Label fx:id="prixLabel2" text="Prix" />
+            <Label fx:id="descLabel2" text="Description" wrapText="true" />
+            <Label fx:id="badgeLabel2" text="" style="-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #ffffff; -fx-background-color: #e07b00; -fx-background-radius: 4; -fx-padding: 2 6 2 6;" />
+            <ComboBox fx:id="combo2" prefWidth="160.0">
+                <items>
+                    <FXCollections fx:factory="observableArrayList">
+                        <String fx:value="0" /><String fx:value="1" /><String fx:value="2" />
+                        <String fx:value="3" /><String fx:value="4" /><String fx:value="5" />
+                        <String fx:value="6" /><String fx:value="7" /><String fx:value="8" />
+                        <String fx:value="9" />
+                    </FXCollections>
+                </items>
+            </ComboBox>
+        </VBox>
+
+        <!-- Carte 3 : claude -->
+        <VBox fx:id="carte3" prefWidth="190.0" spacing="8.0"
+              style="-fx-border-color: #aaaaaa; -fx-border-radius: 8; -fx-background-radius: 8; -fx-background-color: #f5f5f5;">
+            <padding><Insets top="12.0" bottom="12.0" left="12.0" right="12.0" /></padding>
+            <ImageView fitHeight="140.0" fitWidth="160.0" preserveRatio="true" pickOnBounds="true">
+                <image><Image url="@assets/claude.png" /></image>
+            </ImageView>
+            <Label fx:id="nomLabel3" text="Nom" style="-fx-font-weight: bold; -fx-font-size: 14px;" />
+            <Label fx:id="prixLabel3" text="Prix" />
+            <Label fx:id="descLabel3" text="Description" wrapText="true" />
+            <Label fx:id="badgeLabel3" text="" style="-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #ffffff; -fx-background-color: #e07b00; -fx-background-radius: 4; -fx-padding: 2 6 2 6;" />
+            <ComboBox fx:id="combo3" prefWidth="160.0">
                 <items>
                     <FXCollections fx:factory="observableArrayList">
                         <String fx:value="0" /><String fx:value="1" /><String fx:value="2" />

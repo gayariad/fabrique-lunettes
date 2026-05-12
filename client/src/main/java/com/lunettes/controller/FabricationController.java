@@ -28,8 +28,6 @@ import javafx.stage.Stage;
 public class FabricationController {
 
     private static final Logger log = LoggerFactory.getLogger(FabricationController.class);
-
-    // si aucun "validated" n'arrive dans ce délai, on considère que le backend est absent
     private static final int TIMEOUT_SECONDES = 30;
 
     @FXML private Label lblStatut;
@@ -41,12 +39,8 @@ public class FabricationController {
     private String uuid;
 
     private final LivraisonModel livraisonModel = new LivraisonModel();
-
-    // scheduler qui gère le timeout, on démarre un timer, et si "validated" arrive on l'annule
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> tacheTimeout;
-
-    // flag pour éviter d'afficher une erreur de timeout si la commande a déjà abouti
     private final AtomicBoolean commandeTerminee = new AtomicBoolean(false);
 
     public void setMqttClient(MqttClient mqttClient) {
@@ -57,23 +51,17 @@ public class FabricationController {
         this.uuid = uuid;
     }
 
-    // s'abonne aux topics de la commande et démarre le timer de timeout
     public void demarrer() {
         try {
-            // on démarre le timer AVANT de s'abonner pour ne pas rater la fenêtre
-            // si le backend répond très vite, "validated" peut arriver avant qu'on annule le timer
-            // mais AtomicBoolean commandeTerminee évite d'afficher deux messages
             demarrerTimeout();
 
             mqttClient.subscribe("orders/" + uuid + "/validated", (topic, msg) -> {
                 log.info("Commande {} validée par le serveur", uuid);
-                // on annule le timeout le backend a bien reçu notre commande
                 annulerTimeout();
                 Platform.runLater(() -> lblStatut.setText("Commande validée, fabrication en cours..."));
             });
 
             mqttClient.subscribe("orders/" + uuid + "/status", (topic, msg) -> {
-                // messages de statut intermédiaires envoyés par le backend pendant la fabrication
                 String statut = msg.toString();
                 log.info("Statut de la commande {} : {}", uuid, statut);
                 Platform.runLater(() -> {
@@ -125,8 +113,15 @@ public class FabricationController {
         }
     }
 
-    // démarre le timer de timeout
-    // si TIMEOUT_SECONDES s'écoulent sans réponse du backend, on affiche un message à l'utilisateur
+    // Appelé par App via setOnCloseRequest quand l'utilisateur ferme la fenêtre via la croix.
+    // Sans ça, le scheduler tourne en daemon et peut retarder l'arrêt de la JVM.
+    public void nettoyer() {
+        if (!commandeTerminee.get()) {
+            annulerTimeout();
+            seDesabonner();
+        }
+    }
+
     private void demarrerTimeout() {
         tacheTimeout = scheduler.schedule(() -> {
             if (commandeTerminee.get()) return;
@@ -140,7 +135,6 @@ public class FabricationController {
         }, TIMEOUT_SECONDES, TimeUnit.SECONDS);
     }
 
-    // annule le timer de timeout (appelé quand "validated" arrive)
     private void annulerTimeout() {
         if (tacheTimeout != null && !tacheTimeout.isDone()) {
             tacheTimeout.cancel(false);
@@ -148,15 +142,13 @@ public class FabricationController {
         }
     }
 
-    // marque la commande comme terminée, annule le timeout, se désabonne, puis met à jour l'UI
     private void terminer(Runnable miseAJourUI) {
-        if (commandeTerminee.getAndSet(true)) return; // on ne termine qu'une seule fois
+        if (commandeTerminee.getAndSet(true)) return;
         annulerTimeout();
         seDesabonner();
         Platform.runLater(miseAJourUI);
     }
 
-    // se désabonne de tous les topics de cette commande
     private void seDesabonner() {
         try {
             mqttClient.unsubscribe("orders/" + uuid + "/validated");
@@ -164,7 +156,6 @@ public class FabricationController {
             mqttClient.unsubscribe("orders/" + uuid + "/delivery");
             mqttClient.unsubscribe("orders/" + uuid + "/error");
             mqttClient.unsubscribe("orders/" + uuid + "/cancelled");
-            // on arrête le scheduler proprement pour libérer le thread
             scheduler.shutdownNow();
             log.info("Désabonné des topics de la commande {}", uuid);
         } catch (MqttException e) {
@@ -174,11 +165,7 @@ public class FabricationController {
 
     @FXML
     private void onRetour() throws Exception {
-        // si l'utilisateur quitte avant la fin, on nettoie quand même
-        if (!commandeTerminee.get()) {
-            annulerTimeout();
-            seDesabonner();
-        }
+        nettoyer();
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/accueil.fxml"));
         Scene scene = new Scene(loader.load());
         AccueilController ctrl = loader.getController();
@@ -187,7 +174,6 @@ public class FabricationController {
         stage.setScene(scene);
     }
 
-    // affiche les lunettes livrées regroupées par type
     private void afficherLivraison() {
         Map<String, List<String>> groupes = livraisonModel.grouperParType();
         for (Map.Entry<String, List<String>> entry : groupes.entrySet()) {
@@ -202,7 +188,6 @@ public class FabricationController {
         }
     }
 
-    // affiche un message d'erreur dans le label de statut en rouge
     private void afficherErreur(String message) {
         lblStatut.setText("Erreur : " + message);
         lblStatut.setStyle("-fx-text-fill: red;");

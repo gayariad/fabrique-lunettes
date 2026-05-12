@@ -16,13 +16,14 @@ import com.lunettes.controller.AccueilController;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.stage.Stage;
 
 public class App extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
-    // le client MQTT est gardé ici pour pouvoir le fermer proprement quand l'appli se ferme
     private MqttClient mqttClient;
 
     public static void main(String[] args) {
@@ -31,19 +32,25 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        // on lit l'adresse du broker depuis config.properties (B3 : ne pas mettre l'URL en dur)
         String brokerUrl = lireConfig("broker.url");
         if (brokerUrl == null) {
             log.error("URL du broker introuvable dans config.properties — arrêt.");
-            primaryStage.close();
+            afficherErreurFatale(
+                "Configuration manquante",
+                "Le fichier config.properties est absent ou ne contient pas 'broker.url'.\n" +
+                "L'application ne peut pas démarrer."
+            );
             return;
         }
 
-        // on crée le client MQTT une seule fois et on le passe à chaque écran
         mqttClient = creerEtConnecterClient(brokerUrl);
         if (mqttClient == null) {
             log.error("Impossible de se connecter au broker MQTT — arrêt de l'application.");
-            primaryStage.close();
+            afficherErreurFatale(
+                "Connexion impossible",
+                "Impossible de se connecter au broker MQTT :\n" + brokerUrl + "\n\n" +
+                "Vérifiez que le backend est démarré et que l'adresse dans config.properties est correcte."
+            );
             return;
         }
 
@@ -57,22 +64,15 @@ public class App extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        // quand l'utilisateur ferme la fenêtre, on déconnecte proprement le client MQTT
         primaryStage.setOnCloseRequest(event -> fermerProprement());
     }
 
-    // crée un client MQTT et le connecte au broker avec des options adaptées
-    // retourne null si la connexion échoue
     private MqttClient creerEtConnecterClient(String brokerUrl) {
         try {
             MqttConnectOptions options = new MqttConnectOptions();
-            // reconnexion automatique si la connexion est perdue (réseau coupé, broker redémarré...)
             options.setAutomaticReconnect(true);
-            // cleanSession=true : on repart d'un état propre à chaque démarrage
             options.setCleanSession(true);
-            // timeout de connexion : 10 secondes avant d'abandonner
             options.setConnectionTimeout(10);
-            // keepalive : le client envoie un ping toutes les 30s pour garder la connexion active
             options.setKeepAliveInterval(30);
 
             MqttClient client = new MqttClient(brokerUrl, UUID.randomUUID().toString());
@@ -85,7 +85,6 @@ public class App extends Application {
         }
     }
 
-    // ferme la connexion MQTT proprement quand l'application se ferme
     private void fermerProprement() {
         if (mqttClient != null && mqttClient.isConnected()) {
             try {
@@ -97,8 +96,16 @@ public class App extends Application {
         }
     }
 
-    // lit une valeur dans config.properties embarqué dans le JAR
-    // retourne null si le fichier est absent ou si la clé n'existe pas
+    // Affiche une Alert bloquante puis quitte — utilisé quand l'app ne peut pas démarrer.
+    private void afficherErreurFatale(String titre, String message) {
+        Alert alert = new Alert(AlertType.ERROR);
+        alert.setTitle(titre);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+        javafx.application.Platform.exit();
+    }
+
     private String lireConfig(String cle) {
         Properties proprietes = new Properties();
         try (InputStream input = App.class.getResourceAsStream("/config.properties")) {

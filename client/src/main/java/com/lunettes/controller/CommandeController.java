@@ -21,17 +21,27 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 public class CommandeController {
 
     private static final Logger log = LoggerFactory.getLogger(CommandeController.class);
 
-    @FXML private HBox conteneurCartes;
     @FXML private Button btnValider;
     @FXML private Button btnRetour;
+
+    // Labels et ComboBox injectés directement par fx:id — plus d'accès par index fragile
+    @FXML private Label nomLabel0;  @FXML private Label prixLabel0;
+    @FXML private Label descLabel0; @FXML private Label badgeLabel0; @FXML private ComboBox<String> combo0;
+
+    @FXML private Label nomLabel1;  @FXML private Label prixLabel1;
+    @FXML private Label descLabel1; @FXML private Label badgeLabel1; @FXML private ComboBox<String> combo1;
+
+    @FXML private Label nomLabel2;  @FXML private Label prixLabel2;
+    @FXML private Label descLabel2; @FXML private Label badgeLabel2; @FXML private ComboBox<String> combo2;
+
+    @FXML private Label nomLabel3;  @FXML private Label prixLabel3;
+    @FXML private Label descLabel3; @FXML private Label badgeLabel3; @FXML private ComboBox<String> combo3;
 
     private List<Produit> produits = lireJson("/products.json");
     private MqttClient mqttClient;
@@ -40,21 +50,29 @@ public class CommandeController {
         this.mqttClient = mqttClient;
     }
 
-    // on remplit chaque carte produit avec les donnees lues depuis le JSON
     @FXML
     public void initialize() {
+        Label[] noms   = { nomLabel0,  nomLabel1,  nomLabel2,  nomLabel3  };
+        Label[] prix   = { prixLabel0, prixLabel1, prixLabel2, prixLabel3 };
+        Label[] descs  = { descLabel0, descLabel1, descLabel2, descLabel3 };
+        Label[] badges = { badgeLabel0,badgeLabel1,badgeLabel2,badgeLabel3};
+
         for (int i = 0; i < produits.size(); i++) {
-            VBox carte = (VBox) conteneurCartes.getChildren().get(i);
-            Label nomLabel  = (Label) carte.getChildren().get(1);
-            Label prixLabel = (Label) carte.getChildren().get(2);
-            Label descLabel = (Label) carte.getChildren().get(3);
-            nomLabel.setText(produits.get(i).name());
-            prixLabel.setText(produits.get(i).price() + " €");
-            descLabel.setText(produits.get(i).description());
+            Produit p = produits.get(i);
+            noms[i].setText(p.name());
+            prix[i].setText(String.format("%.2f €", p.price()));
+            descs[i].setText(p.description());
+            String badge = p.badge();
+            if (badge != null && !badge.isBlank()) {
+                badges[i].setText(badge);
+                badges[i].setVisible(true);
+            } else {
+                badges[i].setVisible(false);
+                badges[i].setManaged(false);
+            }
         }
     }
 
-    // lit le fichier JSON et retourne la liste des produits
     private List<Produit> lireJson(String jsonPath) {
         try {
             Reader reader = new InputStreamReader(getClass().getResourceAsStream(jsonPath));
@@ -78,30 +96,26 @@ public class CommandeController {
 
     @FXML
     private void onValider() {
+        @SuppressWarnings("unchecked")
+        ComboBox<String>[] combos = new ComboBox[]{ combo0, combo1, combo2, combo3 };
+
         CommandeModel commande = new CommandeModel();
-        for (int i = 0; i < conteneurCartes.getChildren().size(); i++) {
-            VBox carte = (VBox) conteneurCartes.getChildren().get(i);
-            ComboBox<String> combo = (ComboBox<String>) carte.getChildren().get(4);
-            String valeur = combo.getValue() != null ? combo.getValue() : "0";
-            int quantite = Integer.parseInt(valeur);
-            commande.ajouterLigne(produits.get(i).id(), quantite);
+        for (int i = 0; i < produits.size(); i++) {
+            String valeur = combos[i].getValue() != null ? combos[i].getValue() : "0";
+            commande.ajouterLigne(produits.get(i).id(), Integer.parseInt(valeur));
         }
 
-        // on refuse d'envoyer une commande vide et on previent l'utilisateur
         if (commande.estVide()) {
-            afficherErreur("Commande vide", "Veuillez selectionner au moins un produit avant de valider.");
+            afficherErreur("Commande vide", "Veuillez sélectionner au moins un produit avant de valider.");
             return;
         }
 
         String uuid = UUID.randomUUID().toString();
-        // le model sait comment serialiser : "CLAUDE:2;BANANA:1"
         String message = commande.serialiser();
 
         try {
             log.info("Envoi de la commande {} : {}", uuid, message);
 
-            // on prepare l'ecran de fabrication avant d'envoyer le message
-            // comme ca le controller est pret a recevoir la reponse du backend
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fabrication.fxml"));
             Scene scene = new Scene(loader.load());
 
@@ -116,11 +130,10 @@ public class CommandeController {
             stage.setScene(scene);
         } catch (Exception e) {
             log.error("Erreur lors de l'envoi de la commande : {}", e.getMessage());
-            afficherErreur("Erreur reseau", "Impossible d'envoyer la commande.\nVerifiez que le serveur est bien demarre.");
+            afficherErreur("Erreur réseau", "Impossible d'envoyer la commande.\nVérifiez que le serveur est bien démarré.");
         }
     }
 
-    // affiche une boite de dialogue d'erreur a l'utilisateur
     private void afficherErreur(String titre, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(titre);

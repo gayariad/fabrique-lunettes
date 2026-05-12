@@ -1,0 +1,19 @@
+# Artefacts de build Maven
+target/
+
+# Fichiers IDE
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# Logs
+*.log
+logs/
+
+# Fichiers temporaires OS
+.DS_Store
+Thumbs.db
+
