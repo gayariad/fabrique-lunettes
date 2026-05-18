@@ -20,16 +20,33 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.stage.Stage;
 
+/**
+ * Point d'entrée de l'application JavaFX cliente.
+ * Lit la configuration MQTT, établit la connexion au broker, puis affiche l'écran d'accueil.
+ */
 public class App extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
     private MqttClient mqttClient;
 
+    /**
+     * Lance l'application JavaFX.
+     *
+     * @param args arguments de la ligne de commande (non utilisés)
+     */
     public static void main(String[] args) {
         launch(args);
     }
 
+    /**
+     * Initialise la connexion MQTT et affiche la fenêtre principale.
+     * Arrête l'application avec un message d'erreur si la configuration est manquante
+     * ou si la connexion au broker échoue.
+     *
+     * @param primaryStage la fenêtre principale fournie par JavaFX
+     * @throws Exception si le chargement du fichier FXML échoue
+     */
     @Override
     public void start(Stage primaryStage) throws Exception {
         String brokerUrl = lireConfig("broker.url");
@@ -67,6 +84,12 @@ public class App extends Application {
         primaryStage.setOnCloseRequest(event -> fermerProprement());
     }
 
+    /**
+     * Crée un client MQTT et le connecte au broker avec reconnexion automatique.
+     *
+     * @param brokerUrl URL du broker MQTT (ex: {@code tcp://localhost:1883})
+     * @return le client connecté, ou {@code null} en cas d'échec
+     */
     private MqttClient creerEtConnecterClient(String brokerUrl) {
         try {
             MqttConnectOptions options = new MqttConnectOptions();
@@ -85,6 +108,9 @@ public class App extends Application {
         }
     }
 
+    /**
+     * Déconnecte proprement le client MQTT lors de la fermeture de la fenêtre.
+     */
     private void fermerProprement() {
         if (mqttClient != null && mqttClient.isConnected()) {
             try {
@@ -96,7 +122,13 @@ public class App extends Application {
         }
     }
 
-    // Affiche une Alert bloquante puis quitte — utilisé quand l'app ne peut pas démarrer.
+    /**
+     * Affiche une boîte de dialogue d'erreur bloquante puis quitte l'application.
+     * Utilisé uniquement quand l'application ne peut pas démarrer.
+     *
+     * @param titre   titre de la boîte de dialogue
+     * @param message message d'erreur affiché à l'utilisateur
+     */
     private void afficherErreurFatale(String titre, String message) {
         Alert alert = new Alert(AlertType.ERROR);
         alert.setTitle(titre);
@@ -106,6 +138,12 @@ public class App extends Application {
         javafx.application.Platform.exit();
     }
 
+    /**
+     * Lit une valeur dans le fichier {@code config.properties} du classpath.
+     *
+     * @param cle la clé à rechercher (ex: {@code "broker.url"})
+     * @return la valeur associée, ou {@code null} si le fichier est absent ou la clé inexistante
+     */
     private String lireConfig(String cle) {
         Properties proprietes = new Properties();
         try (InputStream input = App.class.getResourceAsStream("/config.properties")) {

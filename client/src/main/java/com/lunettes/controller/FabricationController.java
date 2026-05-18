@@ -13,7 +13,14 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
+import com.google.gson.Gson;
 import com.lunettes.model.LivraisonModel;
+import com.lunettes.model.Produit;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -25,6 +32,11 @@ import javafx.scene.control.ProgressIndicator;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+/**
+ * Controleur de l'ecran de suivi de fabrication.
+ * S'abonne aux topics MQTT de la commande en cours et met a jour l'interface
+ * selon les statuts recus (validation, fabrication, livraison, erreur).
+ */
 public class FabricationController {
 
     private static final Logger log = LoggerFactory.getLogger(FabricationController.class);
@@ -37,20 +49,35 @@ public class FabricationController {
 
     private MqttClient mqttClient;
     private String uuid;
+    private final Map<String, String> nomParId = chargerNoms();
 
     private final LivraisonModel livraisonModel = new LivraisonModel();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> tacheTimeout;
     private final AtomicBoolean commandeTerminee = new AtomicBoolean(false);
 
+    /**
+     * Transmet le client MQTT partage a ce controleur.
+     *
+     * @param mqttClient le client MQTT connecte
+     */
     public void setMqttClient(MqttClient mqttClient) {
         this.mqttClient = mqttClient;
     }
 
+    /**
+     * Definit l'identifiant unique de la commande a suivre.
+     *
+     * @param uuid UUID de la commande, utilise pour construire les topics MQTT
+     */
     public void setUuid(String uuid) {
         this.uuid = uuid;
     }
 
+    /**
+     * S'abonne aux topics MQTT de la commande et demarre le timeout de securite.
+     * Doit etre appele apres {@link #setMqttClient} et {@link #setUuid}.
+     */
     public void demarrer() {
         try {
             demarrerTimeout();
@@ -113,8 +140,11 @@ public class FabricationController {
         }
     }
 
-    // Appelé par App via setOnCloseRequest quand l'utilisateur ferme la fenêtre via la croix.
-    // Sans ça, le scheduler tourne en daemon et peut retarder l'arrêt de la JVM.
+    /**
+     * Se desabonne des topics MQTT et arrete le scheduler.
+     * Doit etre appele quand l'utilisateur ferme la fenetre, pour eviter que
+     * le scheduler ne retarde l'arret de la JVM.
+     */
     public void nettoyer() {
         if (!commandeTerminee.get()) {
             annulerTimeout();
@@ -177,7 +207,9 @@ public class FabricationController {
     private void afficherLivraison() {
         Map<String, List<String>> groupes = livraisonModel.grouperParType();
         for (Map.Entry<String, List<String>> entry : groupes.entrySet()) {
-            Label titreType = new Label(entry.getKey() + " (" + entry.getValue().size() + ")");
+            String id = entry.getKey();
+            String nom = nomParId.getOrDefault(id.toLowerCase(), id);
+            Label titreType = new Label(nom + " (" + entry.getValue().size() + ")");
             titreType.setStyle("-fx-font-weight: bold; -fx-font-size: 16px; -fx-text-fill: black;");
             conteneurResultats.getChildren().add(titreType);
             for (String serial : entry.getValue()) {
@@ -185,6 +217,18 @@ public class FabricationController {
                 lblSerial.setStyle("-fx-font-size: 13px; -fx-text-fill: black;");
                 conteneurResultats.getChildren().add(lblSerial);
             }
+        }
+    }
+
+    private java.util.Map<String, String> chargerNoms() {
+        try {
+            Reader reader = new InputStreamReader(getClass().getResourceAsStream("/products.json"));
+            Produit[] produits = new Gson().fromJson(reader, Produit[].class);
+            return Arrays.stream(produits)
+                .collect(Collectors.toMap(p -> p.id().toLowerCase(), Produit::name));
+        } catch (Exception e) {
+            log.warn("Impossible de charger products.json pour la résolution des noms : {}", e.getMessage());
+            return Map.of();
         }
     }
 

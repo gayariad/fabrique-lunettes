@@ -10,6 +10,10 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.stage.Stage;
 
+/**
+ * Contrôleur de l'écran d'accueil.
+ * Permet à l'utilisateur de naviguer vers la page de commande ou de vérification.
+ */
 public class AccueilController {
 
     private static final Logger log = LoggerFactory.getLogger(AccueilController.class);
@@ -17,13 +21,22 @@ public class AccueilController {
     @FXML private Button boutonCommander;
     @FXML private Button boutonVerifier;
 
-    // le client MQTT est cree dans App.java et passe ici via setMqttClient()
     private MqttClient mqttClient;
 
+    /**
+     * Transmet le client MQTT partagé à ce contrôleur.
+     *
+     * @param mqttClient le client MQTT connecté, créé dans {@link com.lunettes.App}
+     */
     public void setMqttClient(MqttClient mqttClient) {
         this.mqttClient = mqttClient;
     }
 
+    /**
+     * Navigue vers la page de commande.
+     *
+     * @throws Exception si le chargement du fichier FXML échoue
+     */
     @FXML
     private void onCommander() throws Exception {
         log.info("Navigation vers la page de commande");
@@ -38,6 +51,11 @@ public class AccueilController {
         stage.setScene(scene);
     }
 
+    /**
+     * Navigue vers la page de verification de numero de serie.
+     *
+     * @throws Exception si le chargement du fichier FXML echoue
+     */
     @FXML
     private void onVerifier() throws Exception {
         log.info("Navigation vers la page de verification");

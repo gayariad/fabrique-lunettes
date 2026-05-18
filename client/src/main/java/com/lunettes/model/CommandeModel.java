@@ -4,34 +4,46 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-// le Model de la commande stocke ce que l'utilisateur a selectionne
-// et sait comment transformer ca en message a envoyer au backend
-// le controller ne fait plus de logique ici, il delegue tout a cette classe
+/**
+ * Modele d'une commande de lunettes.
+ * Stocke les produits selectionnes et sait les serialiser pour l'envoi MQTT.
+ */
 public class CommandeModel {
 
-    // cle = id du produit en majuscules (ex: "CLAUDE"), valeur = quantite choisie
     private final Map<String, Integer> lignes = new HashMap<>();
 
-    // ajoute ou met a jour la quantite d'un produit dans la commande
-    // si quantite = 0 on ignore, on ne veut pas envoyer des lignes vides
+    /**
+     * Ajoute un produit a la commande avec la quantite voulue.
+     * Une quantite de 0 ou moins est ignoree silencieusement.
+     *
+     * @param idProduit identifiant du produit (ex: {@code "claude"}), converti en majuscules
+     * @param quantite  nombre d'unites demandees (doit etre > 0 pour etre pris en compte)
+     */
     public void ajouterLigne(String idProduit, int quantite) {
         if (quantite > 0) {
             lignes.put(idProduit.toUpperCase(), quantite);
         }
     }
 
-    // retourne true si aucun produit n'a ete selectionne
+    /**
+     * @return {@code true} si aucun produit n'a ete ajoute a la commande
+     */
     public boolean estVide() {
         return lignes.isEmpty();
     }
 
-    // retourne une vue non modifiable des lignes de la commande
+    /**
+     * @return une vue non modifiable des lignes de la commande (cle = id produit, valeur = quantite)
+     */
     public Map<String, Integer> getLignes() {
         return Collections.unmodifiableMap(lignes);
     }
 
-    // transforme la commande en texte "CLAUDE:2;BANANA:1" pour l'envoyer via MQTT
-    // StringBuilder evite de creer un objet String a chaque tour de boucle
+    /**
+     * Serialise la commande au format {@code PRODUIT:quantite;PRODUIT2:quantite2}.
+     *
+     * @return chaine a publier sur le topic MQTT, vide si la commande est vide
+     */
     public String serialiser() {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, Integer> entry : lignes.entrySet()) {

@@ -15,6 +15,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
+/**
+ * Controleur de l'ecran de verification de numero de serie.
+ * Envoie une demande de verification via MQTT et affiche le resultat recu.
+ */
 public class VerificationController {
 
     private static final Logger log = LoggerFactory.getLogger(VerificationController.class);
@@ -27,6 +31,11 @@ public class VerificationController {
     private MqttClient mqttClient;
     private String dernierSerial = null;
 
+    /**
+     * Transmet le client MQTT partage a ce controleur.
+     *
+     * @param mqttClient le client MQTT connecte
+     */
     public void setMqttClient(MqttClient mqttClient) {
         this.mqttClient = mqttClient;
     }

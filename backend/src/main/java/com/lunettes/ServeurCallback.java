@@ -16,22 +16,37 @@ import bernard_flou.Fabricateur;
 import bernard_flou.Fabricateur.Lunette;
 import bernard_flou.Fabricateur.TypeLunette;
 
+/**
+ * Callback MQTT du serveur backend.
+ * Recoit les messages entrants, traite les commandes ({@code orders/+})
+ * et les demandes de verification de serial ({@code serials/+/check}).
+ */
 public class ServeurCallback implements MqttCallback {
 
     private static final Logger log = LoggerFactory.getLogger(ServeurCallback.class);
 
-    // quantité max autorisée par type (exclusive) qui est définie par le cahier des charges
+    /** Quantite maximale autorisee par type de lunette (exclusive), definie par le cahier des charges. */
     private static final int QUANTITE_MAX_PAR_TYPE = 10;
 
     private final Usine usine;
     private final MqttClient mqttClient;
 
+    /**
+     * @param usine      l'usine utilisee pour fabriquer les lunettes
+     * @param mqttClient le client MQTT utilise pour publier les reponses
+     */
     public ServeurCallback(Usine usine, MqttClient mqttClient) {
         this.usine = usine;
         this.mqttClient = mqttClient;
     }
 
-    // appelé automatiquement par la lib MQTT à chaque message reçu
+    /**
+     * Appelee automatiquement par la librairie MQTT a chaque message recu.
+     * Dispatche vers {@link #traiterCommande} ou {@link #traiterVerification} selon le topic.
+     *
+     * @param topic   topic sur lequel le message a ete recu
+     * @param message contenu du message MQTT
+     */
     @Override
     public void messageArrived(String topic, MqttMessage message) {
         log.info("Message reçu sur le topic : {}", topic);
@@ -95,10 +110,12 @@ public class ServeurCallback implements MqttCallback {
         publier("orders/" + uuid + "/delivery", serialiserLivraison(lunettes));
     }
 
-    // vérifie les règles métier définies dans le cahier des charges :
-    // - la quantité totale doit être > 0
-    // - chaque quantité individuelle doit être dans [0, 10[
-    // retourne null si la commande est valide, sinon un message d'erreur
+    /**
+     * Verifie les regles metier de la commande (quantite totale > 0, chaque quantite dans [0, 10[).
+     *
+     * @param commande map type -> quantite a valider
+     * @return {@code null} si la commande est valide, sinon un message d'erreur lisible
+     */
     String validerCommande(Map<TypeLunette, Integer> commande) {
         int totalQuantite = 0;
         for (Map.Entry<TypeLunette, Integer> entry : commande.entrySet()) {
@@ -155,8 +172,12 @@ public class ServeurCallback implements MqttCallback {
         // appelé quand l'envoi d'un message est confirmé - rien à faire ici
     }
 
-    // transforme le texte "CLAUDE:2;BANANA:1" en map {CLAUDE -> 2, BANANA -> 1}
-    // retourne null si le format est incorrect ou si un type de lunette est inconnu
+    /**
+     * Transforme le texte {@code "CLAUDE:2;BANANA:1"} en map {@code {CLAUDE -> 2, BANANA -> 1}}.
+     *
+     * @param contenuMessage payload brut du message MQTT
+     * @return la map parsee, ou {@code null} si le format est incorrect ou un type inconnu
+     */
     Map<TypeLunette, Integer> deserialiserCommande(String contenuMessage) {
         if (contenuMessage == null || contenuMessage.isBlank()) {
             log.warn("Message de commande vide ou null");

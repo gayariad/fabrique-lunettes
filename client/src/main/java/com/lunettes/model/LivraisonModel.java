@@ -9,21 +9,30 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// le Model de la livraison : sait lire le payload brut du backend
-// et transformer ca en donnees propres que le controller peut afficher
-// le controller ne fait plus de parsing de texte, il appelle juste ce model
+/**
+ * Modele de la livraison recue depuis le backend.
+ * Sait lire le payload brut et le transformer en donnees exploitables par le controller.
+ */
 public class LivraisonModel {
 
     private static final Logger log = LoggerFactory.getLogger(LivraisonModel.class);
 
-    // represente une lunette avec son type et son numero de serie
+    /**
+     * Represente une lunette avec son type et son numero de serie.
+     *
+     * @param type   type de la lunette (ex: {@code "CLAUDE"})
+     * @param serial numero de serie unique de la lunette
+     */
     public record Lunette(String type, String serial) {}
 
-    // liste de toutes les lunettes recues
     private final List<Lunette> lunettes = new ArrayList<>();
 
-    // lit le payload "TYPE:serial;TYPE:serial;..." et remplit la liste
-    // les segments malformes sont ignores avec un log d'avertissement
+    /**
+     * Lit le payload {@code "TYPE:serial;TYPE:serial;..."} recu du backend et remplit la liste.
+     * Les segments malformes sont ignores avec un log d'avertissement.
+     *
+     * @param payload chaine brute recue sur le topic MQTT de livraison
+     */
     public void deserialiser(String payload) {
         lunettes.clear();
         for (String partie : payload.split(";")) {
@@ -37,9 +46,12 @@ public class LivraisonModel {
         }
     }
 
-    // regroupe les lunettes par type pour l'affichage
-    // ex: [CLAUDE:s1, CLAUDE:s2, BANANA:s3] -> {CLAUDE=[s1,s2], BANANA=[s3]}
-    // LinkedHashMap preserve l'ordre d'insertion pour que l'affichage soit stable
+    /**
+     * Regroupe les lunettes par type pour l'affichage.
+     * Ex: {@code [CLAUDE:s1, CLAUDE:s2, BANANA:s3] -> {CLAUDE=[s1,s2], BANANA=[s3]}}
+     *
+     * @return map non modifiable (type -> liste de serials), ordre d'insertion preserve
+     */
     public Map<String, List<String>> grouperParType() {
         Map<String, List<String>> groupes = new LinkedHashMap<>();
         for (Lunette lunette : lunettes) {
@@ -48,7 +60,9 @@ public class LivraisonModel {
         return Collections.unmodifiableMap(groupes);
     }
 
-    // retourne le nombre total de lunettes recues
+    /**
+     * @return le nombre total de lunettes recues dans cette livraison
+     */
     public int getNombreLunettes() {
         return lunettes.size();
     }

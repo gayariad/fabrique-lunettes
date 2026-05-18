@@ -13,12 +13,19 @@ import org.slf4j.LoggerFactory;
 
 import bernard_flou.Fabricateur;
 
+/**
+ * Point d'entree du backend de la fabrique de lunettes.
+ * Cree l'usine, lit la configuration MQTT et demarre le serveur.
+ */
 public class App {
 
-    // le logger sert à afficher des messages dans la console avec la date, l'heure et le niveau
-    // c'est mieux que System.out.println car on peut filtrer les messages et les sauvegarder dans un fichier
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
+    /**
+     * Demarre le backend : cree l'usine, se connecte au broker MQTT et attend les commandes.
+     *
+     * @param args arguments de la ligne de commande (non utilises)
+     */
     public static void main(String[] args) {
         //créer les objets métier : le fabricateur et l'usine
         Fabricateur fabricateur = new Fabricateur();
@@ -81,8 +88,12 @@ public class App {
         }
     }
 
-    // lit une valeur dans le fichier config.properties
-    // retourne null si le fichier est absent ou si la clé n'existe pas
+    /**
+     * Lit une valeur dans le fichier {@code config.properties} du classpath.
+     *
+     * @param cle la cle a rechercher (ex: {@code "broker.url"})
+     * @return la valeur associee, ou {@code null} si le fichier est absent ou la cle inexistante
+     */
     private static String lireConfig(String cle) {
         Properties proprietes = new Properties();
 

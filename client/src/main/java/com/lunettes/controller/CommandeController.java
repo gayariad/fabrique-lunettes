@@ -23,6 +23,11 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.stage.Stage;
 
+/**
+ * Controleur de l'ecran de commande.
+ * Charge le catalogue depuis {@code products.json}, affiche les produits
+ * et publie la commande sur MQTT apres validation.
+ */
 public class CommandeController {
 
     private static final Logger log = LoggerFactory.getLogger(CommandeController.class);
@@ -46,10 +51,19 @@ public class CommandeController {
     private List<Produit> produits = lireJson("/products.json");
     private MqttClient mqttClient;
 
+    /**
+     * Transmet le client MQTT partage a ce controleur.
+     *
+     * @param mqttClient le client MQTT connecte
+     */
     public void setMqttClient(MqttClient mqttClient) {
         this.mqttClient = mqttClient;
     }
 
+    /**
+     * Initialise les cartes produit avec les donnees chargees depuis {@code products.json}.
+     * Appelee automatiquement par JavaFX apres le chargement du FXML.
+     */
     @FXML
     public void initialize() {
         Label[] noms   = { nomLabel0,  nomLabel1,  nomLabel2,  nomLabel3  };
@@ -73,6 +87,12 @@ public class CommandeController {
         }
     }
 
+    /**
+     * Charge et desérialise un tableau de {@link Produit} depuis un fichier JSON du classpath.
+     *
+     * @param jsonPath chemin du fichier JSON dans le classpath (ex: {@code "/products.json"})
+     * @return liste des produits, vide en cas d'erreur
+     */
     private List<Produit> lireJson(String jsonPath) {
         try {
             Reader reader = new InputStreamReader(getClass().getResourceAsStream(jsonPath));

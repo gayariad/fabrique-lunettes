@@ -13,19 +13,25 @@ import bernard_flou.Fabricateur;
 import bernard_flou.Fabricateur.Lunette;
 import bernard_flou.Fabricateur.TypeLunette;
 
+/**
+ * Usine de fabrication de lunettes.
+ * Gere une file d'attente de commandes et les traite par lots via un thread de production dedie.
+ * Plusieurs commandes arrivant simultanement sont regroupees dans un meme lot
+ * pour optimiser l'utilisation du {@link Fabricateur}.
+ */
 public class Usine {
 
     private static final Logger log = LoggerFactory.getLogger(Usine.class);
 
     private final Fabricateur fabricateur;
 
-
-    //File d'attente des demandes de production.
-    // Principe de la mutualisation : Un thread de production tourne en permanence en arrière-plan.
-    //Quand il est libre, il regarde combien de demandes attendent dans la file
-    //et essaie d'en regrouper un maximum dans un seul lot (dans la limite de la capacité).
     private final LinkedBlockingQueue<Demande> fileDemandes = new LinkedBlockingQueue<>();
 
+    /**
+     * Cree l'usine et demarre immediatement le thread de production en arriere-plan.
+     *
+     * @param fabricateur le fabricateur utilise pour produire les lunettes
+     */
     public Usine(Fabricateur fabricateur) {
         this.fabricateur = fabricateur;
         // on démarre le thread de production en arrière-plan dès la création de l'usine
@@ -36,9 +42,15 @@ public class Usine {
         log.info("Usine démarrée, capacité du fabricateur : {}", fabricateur.getCapacity());
     }
 
-    //Point d'entrée : appelé par ServeurCallback pour chaque commande reçue.
-    //On ajoute la demande dans la file et on attend que le thread de production nous renvoie le résultat via le CompletableFuture.
-    // Cette méthode bloque le thread appelant jusqu'à la fin de la fabrication.
+    /**
+     * Point d'entree public : fabrique les lunettes demandees.
+     * Ajoute la commande dans la file et bloque jusqu'a ce que le thread de production
+     * ait termine et retourne les lunettes via un {@link java.util.concurrent.CompletableFuture}.
+     *
+     * @param typesLunettes map type -> quantite a produire
+     * @return liste des lunettes produites, vide si la map est vide
+     * @throws RuntimeException si la production echoue ou est interrompue
+     */
     public List<Lunette> produire(final Map<TypeLunette, Integer> typesLunettes) {
         List<TypeLunette> lunettesAFabriquer = transformerMapEnListe(typesLunettes);
 
